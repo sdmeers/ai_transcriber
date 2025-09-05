@@ -1,0 +1,12 @@
+# Ignore models
+models/
+
+# Ignore audio and transcripts
+audio_files/
+transcripts/
+
+# Ignore python virtual environment
+.venv/
+
+# Ignore compiled whisper.cpp code
+scripts/whisper.cpp/
