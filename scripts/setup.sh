@@ -17,9 +17,12 @@ if [ ! -d "whisper.cpp" ]; then
 fi
 cd whisper.cpp
 
-echo "--- Building whisper.cpp ---"
-cmake -B build
-cmake --build build --config Release
+echo "--- Building whisper.cpp with CUDA support ---"
+# Remove previous build directory to ensure a clean build
+rm -rf build
+# Add -DGGML_CUDA=1 to enable Nvidia GPU support and -j for parallel build
+cmake -B build -DGGML_CUDA=1
+cmake --build build -j --config Release
 
 MODEL_NAME="ggml-base.en.bin"
 if [ ! -f "../../models/$MODEL_NAME" ]; then
