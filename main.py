@@ -61,7 +61,6 @@ def transcribe_audio(wav_path: Path) -> str:
     command = [
         str(WHISPER_CLI_PATH),
         "-m", str(WHISPER_MODEL_PATH),
-        "-ngl", "99",  # Offload all possible layers to the GPU
         "-f", str(wav_path),
         "--output-txt"  # Ask whisper.cpp to generate a .txt file
     ]
