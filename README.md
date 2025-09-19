@@ -46,6 +46,40 @@ Before you begin, ensure you have the following installed on your system:
 
 To transcribe an audio file, run the `main.py` script with the path to your audio file as an argument.
 
+## Running with Docker (Recommended)
+
+To avoid system-level dependency issues and ensure a consistent environment, the recommended way to run this application is by using the provided Docker container. This method isolates the application and its specific CUDA, cuDNN, and Python dependencies from your host machine.
+
+### 1. Build the Docker Image
+
+From the project's root directory, run the following command to build the Docker image. This will take several minutes as it installs all necessary system libraries and Python packages.
+
+```bash
+docker build -t ai-transcriber .
+```
+
+### 2. Run the Script Inside the Container
+
+Once the image is built, you can run the transcription script inside the container. The following command will start a container, run the script, and then automatically remove the container when finished.
+
+```bash
+docker run --rm -it --gpus all \
+  -e HF_TOKEN=$HF_TOKEN \
+  -v $(pwd):/app \
+  ai-transcriber \
+  python3 speaker_rec.py audio_files/hpr4469.mp3
+```
+
+**Explanation of the `docker run` command:**
+- `--rm`: Automatically removes the container when it exits.
+- `-it`: Runs the container in interactive mode so you can see the output.
+- `--gpus all`: **(Crucial)** Grants the container access to your host machine's NVIDIA GPU.
+- `-e HF_TOKEN=$HF_TOKEN`: Securely passes your Hugging Face token from your local environment into the container.
+- `-v $(pwd):/app`: Mounts the current directory on your host machine to the `/app` directory inside the container. This allows the script to access your `audio_files` and ensures the output `transcripts` are saved directly to your local project folder.
+
+
+## Manual Usage
+
 1.  **Place your audio files** in the `audio_files` directory (or any other location).
 
 2.  **Run the transcription:**
