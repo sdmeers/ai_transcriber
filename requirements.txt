@@ -1,4 +1,0 @@
-llama-cpp-python
-whisperx
-torch
-pyannote.audio

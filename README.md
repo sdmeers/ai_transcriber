@@ -1,110 +1,91 @@
-# AI Transcriber
+# AI Transcriber with Speaker Diarization
 
-This project provides a command-line tool to transcribe audio files using a locally-run, GPU-accelerated instance of Whisper.cpp. It is designed for fast and efficient transcription of various audio formats.
+This project provides a robust, containerized command-line tool to transcribe audio files and identify different speakers using `whisperx`. It is designed for fast, accurate, and private transcription on a local machine with an NVIDIA GPU.
+
+The use of Docker is strongly recommended to ensure a consistent and stable environment, avoiding the complex dependency and compatibility issues common in AI/ML projects.
 
 ## Features
 
--   **High-Quality Transcription**: Utilizes the Whisper ASR model for accurate speech-to-text conversion.
--   **GPU Acceleration**: Leverages NVIDIA GPUs via CUDA for significantly faster processing.
--   **Audio Pre-processing**: Automatically converts input audio files to the required format (16-bit, 16kHz mono WAV) using `ffmpeg`.
--   **Simple CLI**: Easy-to-use command-line interface for transcribing files.
--   **Local First**: All processing is done locally, ensuring data privacy.
--   **Extensible**: Includes setup for a Llama 3 language model, paving the way for future features like transcript summarization or analysis.
+-   **High-Quality Transcription**: Utilizes the Whisper ASR model for accurate speech-to-text.
+-   **Speaker Diarization**: Identifies and assigns speaker labels (e.g., `SPEAKER_01`, `SPEAKER_02`) to the transcript.
+-   **GPU Acceleration**: Leverages an NVIDIA GPU via a containerized CUDA environment for fast processing.
+-   **Simple & Private**: A straightforward command-line interface runs entirely on your local machine.
+-   **Reproducible Environment**: The provided `Dockerfile` guarantees a working setup, regardless of your host system's configuration.
 
 ## Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
 
--   Python 3.8+
--   An NVIDIA GPU with the appropriate CUDA toolkit installed.
--   `ffmpeg`
--   `git`
--   `wget`
+-   [Docker](https://docs.docker.com/get-docker/)
+-   [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) to allow Docker to access your GPU.
+-   An NVIDIA GPU.
+-   `git` for cloning the repository.
 
-## Setup
+## Getting Started
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/sdmeers/ai_transcriber
-    cd ai_transcriber
-    ```
+### 1. Clone the Repository
 
-2.  **Create and activate a Python virtual environment:**
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+```bash
+git clone https://github.com/sdmeers/ai_transcriber
+cd ai_transcriber
+```
 
-3.  **Run the setup script:**
-    This script will download and build Whisper.cpp, download the required AI models, and install Python dependencies.
-    ```bash
-    bash scripts/setup.sh
-    ```
-    This process may take some time, especially the model downloads and the initial build of Whisper.cpp.
+### 2. Hugging Face Setup
 
-## Usage
+This tool requires models from Hugging Face, some of which are "gated" and require you to accept their terms of use.
 
-To transcribe an audio file, run the `main.py` script with the path to your audio file as an argument.
+**A. Get Your Token:**
+- Go to [https://hf.co/settings/tokens](https://hf.co/settings/tokens) and create a new access token.
+- Grant it the **"Read"** role.
+- In your terminal, export this token as an environment variable. **You will need to do this in every new terminal session.**
+  ```bash
+  export HF_TOKEN="hf_YOUR_TOKEN_HERE"
+  ```
 
-## Running with Docker (Recommended)
+**B. Accept Model Terms:**
+- You must log in to Hugging Face and accept the terms for the two models used by the diarization pipeline.
+  1.  Visit [https://hf.co/pyannote/speaker-diarization-3.1](https://hf.co/pyannote/speaker-diarization-3.1) and agree to the terms.
+  2.  Visit [https://hf.co/pyannote/segmentation-3.0](https://hf.co/pyannote/segmentation-3.0) and agree to the terms.
 
-To avoid system-level dependency issues and ensure a consistent environment, the recommended way to run this application is by using the provided Docker container. This method isolates the application and its specific CUDA, cuDNN, and Python dependencies from your host machine.
+### 3. Build the Docker Image
 
-### 1. Build the Docker Image
-
-From the project's root directory, run the following command to build the Docker image. This will take several minutes as it installs all necessary system libraries and Python packages.
+This command builds the container image, installing all necessary system libraries, Python packages, and AI models. This may take several minutes.
 
 ```bash
 docker build -t ai-transcriber .
 ```
 
-### 2. Run the Script Inside the Container
+### 4. Run the Transcription
 
-Once the image is built, you can run the transcription script inside the container. The following command will start a container, run the script, and then automatically remove the container when finished.
+You can now run the transcription on an audio file. The command below will start the container, run the script, and automatically clean up afterwards.
+
+Place your audio files in the `audio_files` directory.
 
 ```bash
 docker run --rm -it --gpus all \
   -e HF_TOKEN=$HF_TOKEN \
   -v $(pwd):/app \
   ai-transcriber \
-  python3 speaker_rec.py audio_files/hpr4469.mp3
+  python3 speaker_rec.py audio_files/your_audio_file.mp3
 ```
+
+- The final transcript will be saved as `.json` and `.txt` files in the `transcripts` directory on your local machine.
 
 **Explanation of the `docker run` command:**
 - `--rm`: Automatically removes the container when it exits.
-- `-it`: Runs the container in interactive mode so you can see the output.
-- `--gpus all`: **(Crucial)** Grants the container access to your host machine's NVIDIA GPU.
-- `-e HF_TOKEN=$HF_TOKEN`: Securely passes your Hugging Face token from your local environment into the container.
-- `-v $(pwd):/app`: Mounts the current directory on your host machine to the `/app` directory inside the container. This allows the script to access your `audio_files` and ensures the output `transcripts` are saved directly to your local project folder.
-
-
-## Manual Usage
-
-1.  **Place your audio files** in the `audio_files` directory (or any other location).
-
-2.  **Run the transcription:**
-    ```bash
-    python main.py path/to/your/audio.mp3
-    ```
-    For example:
-    ```bash
-    python main.py audio_files/my_meeting.m4a
-    ```
-
-3.  **Find the output:**
-    The script will process the audio, and the final transcript will be saved as a `.txt` file in the `transcripts` directory.
+- `-it`: Runs the container in interactive mode to show you the progress.
+- `--gpus all`: **(Crucial)** Grants the container access to your NVIDIA GPU.
+- `-e HF_TOKEN=$HF_TOKEN`: Securely passes your Hugging Face token into the container.
+- `-v $(pwd):/app`: Mounts your current project directory into the container, allowing it to read your audio files and write the transcripts back to your machine.
 
 ## Project Structure
 
 ```
 /
 ├── audio_files/      # Place your input audio files here
-├── models/           # Stores the downloaded AI models (Whisper and LLM)
 ├── transcripts/      # Output directory for the generated transcripts
-├── scripts/
-│   ├── setup.sh      # Setup script for dependencies and models
-│   └── whisper.cpp/  # Git submodule for the whisper.cpp project
-├── main.py           # The main application script
-├── requirements.txt  # Python dependencies
+├── speaker_rec.py    # The main application script for transcription and diarization
+├── Dockerfile        # Defines the containerized application environment
+├── requirements.txt  # Python dependencies (used within the Dockerfile)
 └── README.md         # This file
 ```
