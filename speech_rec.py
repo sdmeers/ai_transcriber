@@ -1,36 +1,34 @@
+import whisperx
+import torch
+import json
+import sys
+import time
 import argparse
 import subprocess
-import sys
+import warnings
 from pathlib import Path
+
+# Suppress specific UserWarnings
+warnings.filterwarnings("ignore", message="torchaudio._backend.list_audio_backends has been deprecated")
 
 # --- Configuration ---
 # Define paths relative to the script location
 PROJECT_ROOT = Path(__file__).parent
-WHISPER_CPP_DIR = PROJECT_ROOT / "scripts" / "whisper.cpp"
-WHISPER_CLI_PATH = WHISPER_CPP_DIR / "build" / "bin" / "whisper-cli"
-WHISPER_MODEL_PATH = PROJECT_ROOT / "models" / "ggml-base.en.bin"
 TRANSCRIPTS_DIR = PROJECT_ROOT / "transcripts"
-
-def check_dependencies():
-    """Check for required executables and models."""
-    if not WHISPER_CLI_PATH.is_file():
-        print(f"Error: whisper-cli not found at {WHISPER_CLI_PATH}")
-        print("Please ensure you have run the setup.sh script successfully.")
-        sys.exit(1)
-    if not WHISPER_MODEL_PATH.is_file():
-        print(f"Error: Whisper model not found at {WHISPER_MODEL_PATH}")
-        print("Please ensure you have run the setup.sh script successfully.")
-        sys.exit(1)
 
 def convert_audio_for_whisper(audio_path: Path) -> Path:
     """
-    Converts an audio file to the format required by whisper.cpp
-    (16-bit, 16kHz, mono WAV).
+    Converts an audio file to the format required by whisperx
+    (16-bit, 16kHz, mono WAV), skipping if it already exists.
     """
-    print(f"--- Converting {audio_path.name} for transcription ---")
     TRANSCRIPTS_DIR.mkdir(exist_ok=True)
     output_wav_path = TRANSCRIPTS_DIR / f"{audio_path.stem}_converted.wav"
 
+    if output_wav_path.exists():
+        print(f"--- Converted file {output_wav_path.name} already exists, skipping conversion. ---")
+        return output_wav_path
+
+    print(f"--- Converting {audio_path.name} for transcription ---")
     command = [
         "ffmpeg",
         "-i", str(audio_path),
@@ -51,74 +49,107 @@ def convert_audio_for_whisper(audio_path: Path) -> Path:
     print(f"Successfully converted audio to {output_wav_path}")
     return output_wav_path
 
-def transcribe_audio(wav_path: Path) -> str:
-    """
-    Transcribes the given WAV file using whisper.cpp.
-    It tells whisper.cpp to output a .txt file and then reads it.
-    """
-    print(f"--- Transcribing {wav_path.name} with whisper.cpp ---")
-
-    command = [
-        str(WHISPER_CLI_PATH),
-        "-m", str(WHISPER_MODEL_PATH),
-        "-f", str(wav_path),
-        "--output-txt"  # Ask whisper.cpp to generate a .txt file
-    ]
-
-    # Running from the root of the project
-    result = subprocess.run(command, capture_output=True, text=True, cwd=PROJECT_ROOT)
-
-    if result.returncode != 0:
-        print(f"Error during transcription with whisper.cpp:")
-        print(result.stderr)
-        sys.exit(1)
-
-    # The output file will be named based on the input wav, e.g., "audio.wav.txt"
-    # and placed in the directory where the command was run.
-    transcript_path = PROJECT_ROOT / wav_path.with_suffix('.wav.txt').name
-    
-    if not transcript_path.is_file():
-        print(f"Error: Transcript file not found at {transcript_path}")
-        print("Whisper.cpp may have failed silently. Check its output:")
-        print(result.stdout)
-        print(result.stderr)
-        sys.exit(1)
-
-    transcript_text = transcript_path.read_text().strip()
-
-    # --- Cleanup ---
-    transcript_path.unlink() # Delete the .txt file
-    wav_path.unlink()        # Delete the temporary .wav file
-
-    print("--- Transcription complete ---")
-    return transcript_text
-
 def main():
-    """Main function to run the transcription process."""
-    parser = argparse.ArgumentParser(description="Transcribe an audio file using whisper.cpp.")
+    """Main function to run the transcription-only process."""
+    parser = argparse.ArgumentParser(description="Transcribe an audio file.")
     parser.add_argument("audio_file", type=Path, help="Path to the audio file to transcribe (e.g., mp3, wav, m4a).")
+    parser.add_argument("--model", type=str, default="medium.en", help="Whisper model size (e.g., tiny, base, small, medium, large).")
     args = parser.parse_args()
 
-    if not args.audio_file.is_file():
-        print(f"Error: Audio file not found at {args.audio_file}")
-        sys.exit(1)
+    # ------------------------------
+    # Configuration
+    # ------------------------------
+    AUDIO_FILE_PATH = args.audio_file
+    MODEL_SIZE = args.model
+    JSON_OUT = TRANSCRIPTS_DIR / f"{AUDIO_FILE_PATH.stem}.json"
+    TXT_OUT = TRANSCRIPTS_DIR / f"{AUDIO_FILE_PATH.stem}.txt"
 
-    check_dependencies()
+    # ------------------------------
+    # Checks
+    # ------------------------------
+    if not AUDIO_FILE_PATH.is_file():
+        sys.exit(f"❌ Error: Audio file not found at {AUDIO_FILE_PATH}")
 
+    # ------------------------------
+    # Audio Conversion
+    # ------------------------------
+    converted_wav_path = None
     try:
-        converted_wav = convert_audio_for_whisper(args.audio_file)
-        transcript = transcribe_audio(converted_wav)
+        # Convert audio to WAV format required by whisperX
+        converted_wav_path = convert_audio_for_whisper(AUDIO_FILE_PATH)
 
-        print("\n--- TRANSCRIPT ---")
-        print(transcript)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"▶ Using device: {device}")
 
-        # Save the final transcript to a file
-        final_transcript_path = TRANSCRIPTS_DIR / f"{args.audio_file.stem}.txt"
-        final_transcript_path.write_text(transcript)
-        print(f"\nFull transcript saved to: {final_transcript_path}")
+        # ------------------------------
+        # 1. Load Whisper model and audio
+        # ------------------------------
+        print("▶ Loading Whisper model...")
+        model = whisperx.load_model(MODEL_SIZE, device)
+        print(f"▶ Loading audio: {converted_wav_path.name}...")
+        audio = whisperx.load_audio(str(converted_wav_path))
 
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        # ------------------------------
+        # 2. Transcribe audio
+        # ------------------------------
+        print(f"▶ Transcribing...")
+        result = model.transcribe(audio)
+
+        # ------------------------------
+        # 3. Align with WhisperX for word-level timestamps
+        # ------------------------------
+        print("▶ Aligning word-level timestamps...")
+        model_a, metadata = whisperx.load_align_model(
+            language_code=result["language"], device=device
+        )
+        result_aligned = whisperx.align(
+            result["segments"], model_a, metadata, audio, device
+        )
+
+        # ------------------------------
+        # 4. Build structured output
+        # ------------------------------
+        output = {
+            "metadata": {
+                "audio_file": str(AUDIO_FILE_PATH),
+                "model": MODEL_SIZE,
+                "device": device,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            },
+            "transcript": []
+        }
+
+        for seg in result_aligned["segments"]:
+            entry = {
+                "start": round(seg["start"], 2),
+                "end": round(seg["end"], 2),
+                "text": seg["text"].strip()
+            }
+            output["transcript"].append(entry)
+
+        # ------------------------------
+        # 5. Save JSON + TXT in one go
+        # ------------------------------
+        print(f"▶ Saving outputs to {TRANSCRIPTS_DIR}...")
+        TRANSCRIPTS_DIR.mkdir(exist_ok=True)
+        with open(JSON_OUT, "w", encoding="utf-8") as f_json, \
+             open(TXT_OUT, "w", encoding="utf-8") as f_txt:
+
+            json.dump(output, f_json, indent=2, ensure_ascii=False)
+
+            for seg in output["transcript"]:
+                line = f"[{seg['start']:.2f}–{seg['end']:.2f}] {seg['text']}\n"
+                f_txt.write(line)
+
+        print(f"✅ Transcript saved to {JSON_OUT} and {TXT_OUT}")
+
+    finally:
+        # ------------------------------
+        # 6. Cleanup
+        # ------------------------------
+        if converted_wav_path and converted_wav_path.exists():
+            print(f"▶ Cleaning up temporary file: {converted_wav_path.name}")
+            converted_wav_path.unlink()
 
 if __name__ == "__main__":
     main()

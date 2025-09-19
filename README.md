@@ -1,13 +1,13 @@
-# AI Transcriber with Speaker Diarization
+# AI Transcriber and Diarizer
 
-This project provides a robust, containerized command-line tool to transcribe audio files and identify different speakers using `whisperx`. It is designed for fast, accurate, and private transcription on a local machine with an NVIDIA GPU.
+This project provides a robust, containerized command-line tool to transcribe audio files using `whisperx`. It can be run in two modes: transcription-only, or transcription with speaker diarization.
 
 The use of Docker is strongly recommended to ensure a consistent and stable environment, avoiding the complex dependency and compatibility issues common in AI/ML projects.
 
 ## Features
 
--   **High-Quality Transcription**: Utilizes the Whisper ASR model for accurate speech-to-text.
--   **Speaker Diarization**: Identifies and assigns speaker labels (e.g., `SPEAKER_01`, `SPEAKER_02`) to the transcript.
+-   **High-Quality Transcription**: Utilizes the Whisper ASR model for accurate speech-to-text with word-level timestamps.
+-   **Speaker Diarization (Optional)**: Can identify and assign speaker labels (e.g., `SPEAKER_01`, `SPEAKER_02`) to the transcript.
 -   **GPU Acceleration**: Leverages an NVIDIA GPU via a containerized CUDA environment for fast processing.
 -   **Simple & Private**: A straightforward command-line interface runs entirely on your local machine.
 -   **Reproducible Environment**: The provided `Dockerfile` guarantees a working setup, regardless of your host system's configuration.
@@ -30,36 +30,48 @@ git clone https://github.com/sdmeers/ai_transcriber
 cd ai_transcriber
 ```
 
-### 2. Hugging Face Setup
+### 2. Hugging Face Setup (For Speaker Diarization Only)
 
-This tool requires models from Hugging Face, some of which are "gated" and require you to accept their terms of use.
+If you only need transcription, you can skip this step. For speaker diarization, the tool requires gated models from Hugging Face.
 
 **A. Get Your Token:**
-- Go to [https://hf.co/settings/tokens](https://hf.co/settings/tokens) and create a new access token.
-- Grant it the **"Read"** role.
+- Go to [https://hf.co/settings/tokens](https://hf.co/settings/tokens) and create a new access token with the **"Read"** role.
 - In your terminal, export this token as an environment variable. **You will need to do this in every new terminal session.**
   ```bash
   export HF_TOKEN="hf_YOUR_TOKEN_HERE"
   ```
 
 **B. Accept Model Terms:**
-- You must log in to Hugging Face and accept the terms for the two models used by the diarization pipeline.
-  1.  Visit [https://hf.co/pyannote/speaker-diarization-3.1](https://hf.co/pyannote/speaker-diarization-3.1) and agree to the terms.
-  2.  Visit [https://hf.co/pyannote/segmentation-3.0](https://hf.co/pyannote/segmentation-3.0) and agree to the terms.
+- Log in to Hugging Face and accept the terms for the two models used by the diarization pipeline:
+  1.  [pyannote/speaker-diarization-3.1](https://hf.co/pyannote/speaker-diarization-3.1)
+  2.  [pyannote/segmentation-3.0](https://hf.co/pyannote/segmentation-3.0)
 
 ### 3. Build the Docker Image
 
-This command builds the container image, installing all necessary system libraries, Python packages, and AI models. This may take several minutes.
+This command builds the container image, installing all necessary system libraries and Python packages. This may take several minutes.
 
 ```bash
 docker build -t ai-transcriber .
 ```
 
-### 4. Run the Transcription
+### 4. Run the Application
 
-You can now run the transcription on an audio file. The command below will start the container, run the script, and automatically clean up afterwards.
+Place your audio files in the `audio_files` directory. The final transcript will be saved as `.json` and `.txt` files in the `transcripts` directory.
 
-Place your audio files in the `audio_files` directory.
+#### Option 1: Transcription Only
+
+For a fast transcript with timestamps but no speaker labels. This does not require a Hugging Face token.
+
+```bash
+docker run --rm -it --gpus all \
+  -v $(pwd):/app \
+  ai-transcriber \
+  python3 speech_rec.py audio_files/your_audio_file.mp3
+```
+
+#### Option 2: Transcription with Speaker Diarization
+
+For a detailed transcript with speaker labels (e.g., `SPEAKER_01`). **Requires the Hugging Face setup from Step 2.**
 
 ```bash
 docker run --rm -it --gpus all \
@@ -69,23 +81,15 @@ docker run --rm -it --gpus all \
   python3 speaker_rec.py audio_files/your_audio_file.mp3
 ```
 
-- The final transcript will be saved as `.json` and `.txt` files in the `transcripts` directory on your local machine.
-
-**Explanation of the `docker run` command:**
-- `--rm`: Automatically removes the container when it exits.
-- `-it`: Runs the container in interactive mode to show you the progress.
-- `--gpus all`: **(Crucial)** Grants the container access to your NVIDIA GPU.
-- `-e HF_TOKEN=$HF_TOKEN`: Securely passes your Hugging Face token into the container.
-- `-v $(pwd):/app`: Mounts your current project directory into the container, allowing it to read your audio files and write the transcripts back to your machine.
-
 ## Project Structure
 
 ```
 /
 ├── audio_files/      # Place your input audio files here
 ├── transcripts/      # Output directory for the generated transcripts
-├── speaker_rec.py    # The main application script for transcription and diarization
+├── speaker_rec.py    # Script for transcription with speaker diarization
+├── speech_rec.py     # Script for transcription only
 ├── Dockerfile        # Defines the containerized application environment
-├── requirements.txt  # Python dependencies (used within the Dockerfile)
 └── README.md         # This file
+```
 ```
