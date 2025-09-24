@@ -7,6 +7,7 @@ import time
 import argparse
 import subprocess
 import warnings
+import ollama
 from pathlib import Path
 
 # Suppress specific UserWarnings
@@ -50,11 +51,44 @@ def convert_audio_for_whisper(audio_path: Path) -> Path:
     print(f"Successfully converted audio to {output_wav_path}")
     return output_wav_path
 
+def summarize_transcript(transcript_text: str, model: str, ollama_host: str) -> str:
+    """
+    Summarizes the transcript using a local LLM with Ollama.
+    """
+    print(f"--- Summarizing transcript using {model} at {ollama_host} ---")
+    prompt = f"""
+You are an expert AI assistant that specializes in summarizing meeting transcripts. Please provide a concise summary of the following text. Structure your summary with these sections:
+- A brief, one-paragraph overview of the conversation.
+- A bulleted list of the key topics discussed.
+- A bulleted list of any action items or decisions that were made.
+
+Here is the transcript:
+---
+{transcript_text}
+---
+    """
+    try:
+        client = ollama.Client(host=f"{ollama_host}:11434")
+        response = client.chat(
+            model=model,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        summary = response['message']['content']
+        print("--- Summarization complete ---")
+        return summary
+    except Exception as e:
+        # Catch a generic exception, which could be from network issues or Ollama itself
+        print(f"Error during summarization with Ollama: {e}")
+        # Return a placeholder or re-raise, for now, let's return an error message
+        return f"Could not generate summary. Error: {e}"
+
 def main():
     """Main function to run the transcription and diarization process."""
     parser = argparse.ArgumentParser(description="Transcribe an audio file and perform speaker diarization.")
     parser.add_argument("audio_file", type=Path, help="Path to the audio file to transcribe (e.g., mp3, wav, m4a).")
     parser.add_argument("--model", type=str, default="medium.en", help="Whisper model size (e.g., tiny, base, small, medium, large).")
+    parser.add_argument("--summarizer_model", type=str, default="llama3.1:8b", help="Ollama model to use for summarization.")
+    parser.add_argument("--ollama_host", type=str, default="http://127.0.0.1", help="Host for the Ollama API (e.g., http://host.docker.internal).")
     args = parser.parse_args()
 
     # ------------------------------
@@ -65,6 +99,7 @@ def main():
     HF_TOKEN = os.getenv("HF_TOKEN")
     JSON_OUT = TRANSCRIPTS_DIR / f"{AUDIO_FILE_PATH.stem}.json"
     TXT_OUT = TRANSCRIPTS_DIR / f"{AUDIO_FILE_PATH.stem}.txt"
+    SUMMARY_OUT = TRANSCRIPTS_DIR / f"{AUDIO_FILE_PATH.stem}_summary.txt"
 
     # ------------------------------
     # Checks
@@ -166,9 +201,24 @@ def main():
 
         print(f"✅ Transcript saved to {JSON_OUT} and {TXT_OUT}")
 
+        # ------------------------------
+        # 8. Summarize Transcript
+        # ------------------------------
+        # Read the generated transcript text
+        with open(TXT_OUT, "r", encoding="utf-8") as f:
+            transcript_content = f.read()
+
+        summary = summarize_transcript(transcript_content, args.summarizer_model, args.ollama_host)
+
+        # Save the summary
+        with open(SUMMARY_OUT, "w", encoding="utf-8") as f:
+            f.write(summary)
+
+        print(f"✅ Summary saved to {SUMMARY_OUT}")
+
     finally:
         # ------------------------------
-        # 8. Cleanup
+        # 9. Cleanup
         # ------------------------------
         if converted_wav_path and converted_wav_path.exists():
             print(f"▶ Cleaning up temporary file: {converted_wav_path.name}")

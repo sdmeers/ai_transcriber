@@ -30,7 +30,8 @@ RUN pip install torch torchvision torchaudio --index-url https://download.pytorc
 # This ensures we get the latest version that works with the libraries above
 RUN pip install \
     git+https://github.com/m-bain/whisperx.git \
-    llama-cpp-python
+    llama-cpp-python \
+    ollama
 
 # Set the working directory inside the container
 WORKDIR /app
