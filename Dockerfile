@@ -36,6 +36,21 @@ RUN pip install \
 # Set the working directory inside the container
 WORKDIR /app
 
+# --- Pre-download models during build ---
+# Set HF_TOKEN as a build argument for pyannote diarization model
+ARG HF_TOKEN
+ENV HF_TOKEN=$HF_TOKEN
+
+# Create a temporary script to download models
+RUN python3 -c "import whisperx; import os; from whisperx.diarize import DiarizationPipeline; \
+    print('Downloading WhisperX model (medium.en)...'); \
+    whisperx.load_model('medium.en', 'cpu', compute_type='float32'); \
+    print('Downloading WhisperX alignment model (en)...'); \
+    whisperx.load_align_model('en', 'cpu'); \
+    print('Downloading Pyannote diarization model...'); \
+    DiarizationPipeline(model_name='pyannote/speaker-diarization-2.1', use_auth_token=os.getenv('HF_TOKEN'), device='cpu'); \
+    print('All models pre-downloaded.')"
+
 # Copy the rest of your application's code into the container
 COPY . .
 
