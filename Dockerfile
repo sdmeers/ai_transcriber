@@ -26,12 +26,9 @@ RUN pip install --upgrade pip
 # Install PyTorch with CUDA 12.1 support first to ensure compatibility
 RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# Install whisperx from its official repository and other dependencies
-# This ensures we get the latest version that works with the libraries above
-RUN pip install \
-    git+https://github.com/m-bain/whisperx.git \
-    llama-cpp-python \
-    ollama
+# Copy requirements file and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -42,9 +39,11 @@ ARG HF_TOKEN
 ENV HF_TOKEN=$HF_TOKEN
 
 # Create a temporary script to download models
+# Note: We use the default model 'medium.en' here. If you change the default in app.py,
+# you might want to change it here as well to ensure the correct model is pre-downloaded.
 RUN python3 -c "import whisperx; import os; from whisperx.diarize import DiarizationPipeline; \
     print('Downloading WhisperX model (medium.en)...'); \
-    whisperx.load_model('medium.en', 'cpu', compute_type='float32'); \
+    whisperx.load_model(os.getenv('WHISPER_MODEL', 'medium.en'), 'cpu', compute_type='float32'); \
     print('Downloading WhisperX alignment model (en)...'); \
     whisperx.load_align_model('en', 'cpu'); \
     print('Downloading Pyannote diarization model...'); \
@@ -54,4 +53,8 @@ RUN python3 -c "import whisperx; import os; from whisperx.diarize import Diariza
 # Copy the rest of your application's code into the container
 COPY . .
 
-# The container is now ready. The user will run the script via `docker run`.
+# Expose the port the app runs on
+EXPOSE 5000
+
+# Define the command to run the application
+CMD ["flask", "run", "--host=0.0.0.0"]
