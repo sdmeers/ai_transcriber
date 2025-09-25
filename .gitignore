@@ -7,6 +7,10 @@ transcripts/
 
 # Ignore python virtual environment
 .venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Ignore compiled whisper.cpp code
 scripts/whisper.cpp/
