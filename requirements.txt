@@ -1,0 +1,6 @@
+whisperx
+llama-cpp-python
+ollama
+torch
+torchaudio
+Flask

@@ -1,17 +1,18 @@
 # AI Transcriber, Diarizer, and Summarizer
 
-This project provides a robust, containerized command-line tool to transcribe audio files, identify speakers, and generate a concise summary of the conversation. It uses `whisperx` for transcription, `pyannote` for diarization, and a local LLM via `Ollama` for summarization.
+This project provides a robust, containerized web application to transcribe audio files, identify speakers, and generate a concise summary of the conversation. It features a simple web interface for uploading files and viewing results.
 
-The use of Docker is strongly recommended to ensure a consistent and stable environment, avoiding the complex dependency and compatibility issues common in AI/ML projects.
+The application uses `whisperx` for transcription, `pyannote` for diarization, and a local LLM via `Ollama` for summarization. The entire stack runs in a Docker container for a stable, easy-to-manage, and private environment.
 
 ## Features
 
--   **High-Quality Transcription**: Utilizes the Whisper ASR model for accurate speech-to-text with word-level timestamps.
+-   **Simple Web Interface**: Upload audio files and view transcripts and summaries directly in your browser.
+-   **High-Quality Transcription**: Utilizes Whisper models for accurate speech-to-text with word-level timestamps.
 -   **Speaker Diarization**: Identifies and assigns speaker labels (e.g., `SPEAKER_01`, `SPEAKER_02`) to the transcript.
--   **AI-Powered Summarization**: Uses a local LLM (e.g., Llama 3.1) to generate a structured summary of the transcript, including key topics and action items.
+-   **AI-Powered Summarization**: Uses a local LLM (e.g., Llama 3.1) to generate a structured summary.
 -   **GPU Acceleration**: Leverages an NVIDIA GPU via a containerized CUDA environment for fast processing.
--   **Simple & Private**: A straightforward command-line interface that runs entirely on your local machine.
--   **Reproducible Environment**: The provided `Dockerfile` guarantees a working setup, with all models pre-downloaded for fast execution.
+-   **Private & Local**: All processing happens on your local machine.
+-   **Reproducible Environment**: The `Dockerfile` guarantees a working setup, with all models pre-downloaded for fast execution.
 
 ## Prerequisites
 
@@ -80,53 +81,44 @@ This command builds the container image, installing all dependencies and pre-dow
 **Important:** You must provide your Hugging Face token as a build argument.
 
 ```bash
-docker build --build-arg HF_TOKEN=$HF_TOKEN -t ai-transcriber .
+docker build --build-arg HF_TOKEN -t ai-transcriber .
 ```
 
 ### 5. Run the Application
 
-Place your audio files in the `audio_files` directory. The final transcript, diarized text, and summary will be saved in the `transcripts` directory.
-
-The easiest way to run the application is with the provided helper script.
+The easiest way to run the application is with the provided helper script `ai_transcriber.sh`.
 
 **A. Make the script executable (one-time setup):**
 ```bash
-chmod +x run_transcriber.sh
+chmod +x ai_transcriber.sh
 ```
 
-**B. Run the transcriber:**
+**B. Run the application:**
 ```bash
-./run_transcriber.sh audio_files/your_audio_file.mp3
+./ai_transcriber.sh
 ```
-The script handles passing the necessary arguments to the Docker container. It will create three files:
-- `your_audio_file.json` (Detailed data)
-- `your_audio_file.txt` (Formatted transcript with speakers)
-- `your_audio_file_summary.txt` (AI-generated summary)
+This script will start the Docker container in the background and automatically open the web interface in your browser at `http://localhost:5000`.
 
-#### Manual Docker Command
+-   To **see the application logs**, run: `docker logs -f ai-transcriber-app`
+-   To **stop the application**, run: `docker stop ai-transcriber-app`
 
-If you prefer to run the `docker` command directly:
+### 6. Using the Web Interface
 
-```bash
-docker run --rm -it \
-  -e HF_TOKEN=$HF_TOKEN \
-  --gpus all \
-  -v $(pwd):/app \
-  ai-transcriber \
-  python3 speaker_rec.py audio_files/your_audio_file.mp3 --ollama_host http://host.docker.internal
-```
-**Note:** The `--ollama_host http://host.docker.internal` argument is crucial for users on Docker Desktop (macOS, Windows, or Linux).
+1.  Once the page loads, click the "Choose File" button to select an audio file (`.mp3`, `.wav`, `.m4a`).
+2.  Click "Transcribe File".
+3.  A loading indicator will appear. Processing can take several minutes depending on the file size and your hardware.
+4.  Once complete, the transcription and a summary will appear on the page. The output files (`.txt`) will also be saved to the `transcripts` directory.
 
 ## Project Structure
 
 ```
 /
-├── audio_files/      # Place your input audio files here
-├── transcripts/      # Output directory for generated files
-├── run_transcriber.sh # Helper script to run the application
-├── speaker_rec.py    # Script for transcription, diarization, and summarization
-├── speech_rec.py     # Script for transcription only (no summarization)
+├── audio_files/      # Temporary storage for uploads
+├── transcripts/      # Output directory for generated .txt files
+├── static/           # CSS for the web interface
+├── templates/        # HTML for the web interface
+├── app.py            # The Flask web application
+├── ai_transcriber.sh # Helper script to run the application
 ├── Dockerfile        # Defines the containerized application environment
 └── README.md         # This file
-```
 ```

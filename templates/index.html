@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Transcriber</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>AI Transcriber & Summarizer</h1>
+        <p>Upload an audio file (MP3, WAV, M4A) to transcribe and summarize its content.</p>
+        <form id="upload-form" enctype="multipart/form-data">
+            <input type="file" id="file-input" name="file" accept=".mp3,.wav,.m4a,.ogg" required>
+            <button type="submit">Transcribe File</button>
+        </form>
+
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p>Processing... This may take several minutes for large files.</p>
+        </div>
+
+        <div id="results" class="hidden">
+            <div class="result-section">
+                <h2>Transcription</h2>
+                <pre id="transcript-output"></pre>
+            </div>
+            <div class="result-section">
+                <h2>Summary</h2>
+                <pre id="summary-output"></pre>
+            </div>
+        </div>
+
+        <div id="error" class="hidden">
+            <h2>An Error Occurred</h2>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const fileInput = document.getElementById('file-input');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select a file to upload.');
+                return;
+            }
+
+            // Hide previous results/errors and show loading indicator
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('error').classList.add('hidden');
+
+            try {
+                const response = await fetch('/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                document.getElementById('loading').classList.add('hidden');
+
+                if (response.ok) {
+                    document.getElementById('transcript-output').textContent = result.transcript;
+                    // For the summary, we replace newlines with <br> for proper formatting in HTML
+                    document.getElementById('summary-output').innerHTML = result.summary.replace(/\n/g, '<br>');
+                    document.getElementById('results').classList.remove('hidden');
+                } else {
+                    document.getElementById('error-message').textContent = result.error || 'An unknown error occurred.';
+                    document.getElementById('error').classList.remove('hidden');
+                }
+
+            } catch (err) {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error-message').textContent = 'Failed to connect to the server or an unexpected error occurred. See console for details.';
+                document.getElementById('error').classList.remove('hidden');
+                console.error(err);
+            }
+        });
+    </script>
+</body>
+</html>
