@@ -2,6 +2,12 @@
 
 # Script to run the AI Transcriber web application and open it in a browser.
 
+# Source environment variables if .env file exists
+if [ -f .env ]; then
+  echo "--- Sourcing environment variables from .env file ---"
+  source .env
+fi
+
 # --- Configuration ---
 IMAGE_NAME="ai-transcriber"
 CONTAINER_NAME="ai-transcriber-app"
@@ -49,7 +55,8 @@ APP_URL="http://localhost:$APP_PORT"
 echo "✅ Success! Opening application at $APP_URL"
 
 # 5. Open in Google Chrome
-cmd.exe /c start "$APP_URL"
+#cmd.exe /c start "$APP_URL"
+"/mnt/c/Program Files/Google/Chrome/Application/chrome.exe" --new-window "$APP_URL"
 
 echo "
 Application is running in the background.

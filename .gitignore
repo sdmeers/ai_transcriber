@@ -14,3 +14,7 @@ __pycache__/
 
 # Ignore compiled whisper.cpp code
 scripts/whisper.cpp/
+
+
+# Ignore environment file
+.env
